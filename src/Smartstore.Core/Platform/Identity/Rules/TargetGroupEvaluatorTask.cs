@@ -30,24 +30,35 @@ public partial class TargetGroupEvaluatorTask(
 
         using (var scope = new DbContextScope(_db, autoDetectChanges: false, minHookImportance: HookImportance.Important, deferCommit: true))
         {
-            // Delete existing system mappings.
-            var deleteQuery = _db.CustomerRoleMappings.Where(x => x.IsSystemMapping);
+            int[] roleIds = null;
             if (ctx.Parameters.ContainsKey("CustomerRoleIds"))
             {
-                var roleIds = ctx.Parameters["CustomerRoleIds"].ToIntArray();
+                roleIds = ctx.Parameters["CustomerRoleIds"].ToIntArray();
+            }
+
+            // Delete existing system mappings.
+            var deleteQuery = _db.CustomerRoleMappings.Where(x => x.IsSystemMapping);
+            if (roleIds != null)
+            {
                 deleteQuery = deleteQuery.Where(x => roleIds.Contains(x.CustomerRoleId));
             }
 
             numDeleted = await deleteQuery.ExecuteDeleteAsync(cancelToken);
 
             // Insert new customer role mappings.
-            var roles = await _db.CustomerRoles
+            var rolesQuery = _db.CustomerRoles
                 .Include(x => x.RuleSets)
                 .ThenInclude(x => x.Rules)
                 .AsNoTracking()
                 .AsSplitQuery()
-                .Where(x => x.Active && x.RuleSets.Any(y => y.IsActive))
-                .ToListAsync(cancelToken);
+                .Where(x => x.Active && x.RuleSets.Any(y => y.IsActive));
+
+            if (roleIds != null)
+            {
+                rolesQuery = rolesQuery.Where(x => roleIds.Contains(x.Id));
+            }
+
+            var roles = await rolesQuery.ToListAsync(cancelToken);
             rolesCount = roles.Count;
 
             foreach (var role in roles)
