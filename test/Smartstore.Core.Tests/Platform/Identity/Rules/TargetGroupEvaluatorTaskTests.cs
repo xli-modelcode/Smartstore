@@ -9,6 +9,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
 using Smartstore.Caching;
@@ -21,6 +24,9 @@ using Smartstore.Core.Rules.Filters;
 using Smartstore.Core.Security;
 using Smartstore.Data;
 using Smartstore.Data.Providers;
+using Smartstore.Engine;
+using Smartstore.Engine.Modularity;
+using Smartstore.IO;
 using Smartstore.Scheduling;
 using Smartstore.Test.Common;
 using Smartstore.Threading;
@@ -49,6 +55,13 @@ namespace Smartstore.Core.Tests.Platform.Identity.Rules;
 /// must stay open for the lifetime of the context, because the in-memory database is destroyed the
 /// moment the connection closes.
 /// </para>
+/// <para>
+/// <c>UseDbFactory(...)</c> constructs a <see cref="DbFactoryOptionsExtension"/>, whose constructor reads
+/// <c>EngineContext.Current.Application.Services</c>. To keep this fixture independently runnable without
+/// pulling in <see cref="ServiceTestBase"/>'s full host/engine bootstrap, <see cref="SetUp"/> installs a
+/// minimal <see cref="TestEngine"/>/<see cref="MinimalApplicationContext"/> pair for the duration of each
+/// test and <see cref="TearDown"/> restores whatever engine was previously current.
+/// </para>
 /// </remarks>
 [TestFixture]
 public class TargetGroupEvaluatorTaskTests
@@ -57,6 +70,7 @@ public class TargetGroupEvaluatorTaskTests
 
     private SqliteConnection _connection;
     private SmartDbContext _db;
+    private IEngine _previousEngine;
 
     private Mock<ICacheManager> _cacheMock;
     private Mock<IRuleService> _ruleServiceMock;
@@ -66,6 +80,18 @@ public class TargetGroupEvaluatorTaskTests
     [SetUp]
     public void SetUp()
     {
+        // UseDbFactory(...) below constructs a DbFactoryOptionsExtension, whose constructor reads
+        // EngineContext.Current.Application.Services (an Autofac scope) to look up SmartConfiguration.
+        // This fixture deliberately avoids ServiceTestBase's full engine/host bootstrap (see class
+        // remarks). TestEngine.Start(...) would trigger EngineStarter<T>'s module-loading machinery,
+        // so the Application property is set directly instead - and whatever engine was previously
+        // current is restored in TearDown, so this doesn't leak state into other fixtures.
+        _previousEngine = EngineContext.Current;
+        EngineContext.Replace(new TestEngine
+        {
+            Application = new MinimalApplicationContext(new ContainerBuilder().Build())
+        });
+
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
 
@@ -109,6 +135,8 @@ public class TargetGroupEvaluatorTaskTests
         _connection?.Dispose();
 
         DataSettings.Reload();
+
+        EngineContext.Replace(_previousEngine);
     }
 
     #region Scenario 1: CustomerRoleIds scoping
@@ -514,6 +542,42 @@ public class TargetGroupEvaluatorTaskTests
 
         public override DbContextOptionsBuilder ConfigureDbContext(DbContextOptionsBuilder builder, string connectionString)
             => builder.UseSqlite(_connection);
+    }
+
+    /// <summary>
+    /// Minimal <see cref="IApplicationContext"/> whose only purpose is to give
+    /// <see cref="DbFactoryOptionsExtension"/>'s constructor a working <c>Services</c> scope to resolve
+    /// against. Autofac's <c>ResolveOptional&lt;TService&gt;()</c> tolerates nothing being registered, so
+    /// an empty Autofac scope is sufficient. Every other member is unused by this fixture.
+    /// </summary>
+    private sealed class MinimalApplicationContext : IApplicationContext
+    {
+        public MinimalApplicationContext(ILifetimeScope services)
+        {
+            Services = services;
+        }
+
+        public ILifetimeScope Services { get; }
+
+        public IHostEnvironment HostEnvironment => throw new NotImplementedException();
+        public IConfiguration Configuration => throw new NotImplementedException();
+        public ILogger Logger => throw new NotImplementedException();
+        public SmartConfiguration AppConfiguration => throw new NotImplementedException();
+        public IModuleCatalog ModuleCatalog { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public ITypeScanner TypeScanner { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public bool IsInstalled => throw new NotImplementedException();
+        public bool IsWebHost => throw new NotImplementedException();
+        public RuntimeInfo RuntimeInfo => throw new NotImplementedException();
+        public IOSIdentity OSIdentity => throw new NotImplementedException();
+        public IFileSystem ContentRoot => throw new NotImplementedException();
+        public IFileSystem WebRoot => throw new NotImplementedException();
+        public IFileSystem ThemesRoot => throw new NotImplementedException();
+        public IFileSystem ModulesRoot => throw new NotImplementedException();
+        public IFileSystem AppDataRoot => throw new NotImplementedException();
+        public IFileSystem TenantRoot => throw new NotImplementedException();
+
+        public IDirectory GetTempDirectory(string subDirectory = null) => throw new NotImplementedException();
+        public IDirectory GetTenantTempDirectory(string subDirectory = null) => throw new NotImplementedException();
     }
 
     #endregion
