@@ -30,6 +30,7 @@ using Smartstore.IO;
 using Smartstore.Scheduling;
 using Smartstore.Test.Common;
 using Smartstore.Threading;
+using Smartstore.Utilities;
 
 namespace Smartstore.Core.Tests.Platform.Identity.Rules;
 
@@ -62,6 +63,15 @@ namespace Smartstore.Core.Tests.Platform.Identity.Rules;
 /// minimal <see cref="TestEngine"/>/<see cref="MinimalApplicationContext"/> pair for the duration of each
 /// test and <see cref="TearDown"/> restores whatever engine was previously current.
 /// </para>
+/// <para>
+/// <see cref="MinimalApplicationContext"/> throws <see cref="NotImplementedException"/> for every member
+/// it doesn't need, including <see cref="IApplicationContext.IsWebHost"/>. <see cref="CommonHelper.IsHosted"/>
+/// caches <c>EngineContext.Current.Application.IsWebHost</c> once per process the first time anything reads
+/// it, so if this fixture ran before any <see cref="CommonHelper.IsHosted"/> read elsewhere, that lazy
+/// evaluation would hit <see cref="MinimalApplicationContext"/> and throw. <see cref="SetUp"/> therefore
+/// sets <see cref="CommonHelper.IsHosted"/> (and <see cref="CommonHelper.IsDevEnvironment"/>) explicitly,
+/// exactly as <see cref="ServiceTestBase"/> does, so that lazy evaluation never happens.
+/// </para>
 /// </remarks>
 [TestFixture]
 public class TargetGroupEvaluatorTaskTests
@@ -91,6 +101,12 @@ public class TargetGroupEvaluatorTaskTests
         {
             Application = new MinimalApplicationContext(new ContainerBuilder().Build())
         });
+
+        // MinimalApplicationContext.IsWebHost throws, so force CommonHelper's lazy-cached flags to a
+        // known value up front - exactly as ServiceTestBase does - instead of letting something read
+        // CommonHelper.IsHosted for the first time against this fixture's minimal engine and throw.
+        CommonHelper.IsHosted = false;
+        CommonHelper.IsDevEnvironment = false;
 
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
