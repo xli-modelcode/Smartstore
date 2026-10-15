@@ -175,13 +175,7 @@ public class TargetGroupEvaluatorTaskTests
         _db.SaveChanges();
 
         // Only role A's rule set may ever be evaluated; it recomputes to customer A2.
-        var groupA = new FilterExpressionGroup(typeof(Customer));
-        _ruleServiceMock
-            .Setup(x => x.CreateExpressionGroupAsync(It.Is<RuleSetEntity>(rs => rs.Id == ruleSetA.Id), It.IsAny<IRuleVisitor>()))
-            .ReturnsAsync(groupA);
-        _targetGroupServiceMock
-            .Setup(x => x.ProcessFilter(It.Is<FilterExpression[]>(f => f.Length == 1 && ReferenceEquals(f[0], groupA)), LogicalRuleOperator.And, 0, 500))
-            .Returns(CreateFilterResult(customerA2.Id));
+        SetupRuleEvaluation(ruleSetA, customerA2.Id);
 
         var task = CreateTask();
         var (ctx, _) = CreateExecutionContext(new Dictionary<string, string>
@@ -225,13 +219,7 @@ public class TargetGroupEvaluatorTaskTests
         _db.Customers.Add(customer);
         _db.SaveChanges();
 
-        var group = new FilterExpressionGroup(typeof(Customer));
-        _ruleServiceMock
-            .Setup(x => x.CreateExpressionGroupAsync(It.Is<RuleSetEntity>(rs => rs.Id == eligibleRuleSet.Id), It.IsAny<IRuleVisitor>()))
-            .ReturnsAsync(group);
-        _targetGroupServiceMock
-            .Setup(x => x.ProcessFilter(It.Is<FilterExpression[]>(f => f.Length == 1 && ReferenceEquals(f[0], group)), LogicalRuleOperator.And, 0, 500))
-            .Returns(CreateFilterResult(customer.Id));
+        SetupRuleEvaluation(eligibleRuleSet, customer.Id);
 
         var task = CreateTask();
         var (ctx, _) = CreateExecutionContext();
@@ -271,13 +259,7 @@ public class TargetGroupEvaluatorTaskTests
 
         var customerIds = customers.Select(x => x.Id).ToArray();
 
-        var group = new FilterExpressionGroup(typeof(Customer));
-        _ruleServiceMock
-            .Setup(x => x.CreateExpressionGroupAsync(It.Is<RuleSetEntity>(rs => rs.Id == ruleSet.Id), It.IsAny<IRuleVisitor>()))
-            .ReturnsAsync(group);
-        _targetGroupServiceMock
-            .Setup(x => x.ProcessFilter(It.Is<FilterExpression[]>(f => f.Length == 1 && ReferenceEquals(f[0], group)), LogicalRuleOperator.And, 0, 500))
-            .Returns(CreateFilterResult(customerIds));
+        SetupRuleEvaluation(ruleSet, customerIds);
 
         var task = CreateTask();
         var (ctx, _) = CreateExecutionContext();
@@ -307,13 +289,7 @@ public class TargetGroupEvaluatorTaskTests
         _db.Customers.Add(customer);
         _db.SaveChanges();
 
-        var group = new FilterExpressionGroup(typeof(Customer));
-        _ruleServiceMock
-            .Setup(x => x.CreateExpressionGroupAsync(It.Is<RuleSetEntity>(rs => rs.Id == ruleSet.Id), It.IsAny<IRuleVisitor>()))
-            .ReturnsAsync(group);
-        _targetGroupServiceMock
-            .Setup(x => x.ProcessFilter(It.Is<FilterExpression[]>(f => f.Length == 1 && ReferenceEquals(f[0], group)), LogicalRuleOperator.And, 0, 500))
-            .Returns(CreateFilterResult(customer.Id));
+        SetupRuleEvaluation(ruleSet, customer.Id);
 
         var task = CreateTask();
         var (ctx, _) = CreateExecutionContext();
@@ -337,13 +313,7 @@ public class TargetGroupEvaluatorTaskTests
         _db.CustomerRoleMappings.Add(new CustomerRoleMapping { CustomerId = customer.Id, CustomerRoleId = role.Id, IsSystemMapping = true });
         _db.SaveChanges();
 
-        var group = new FilterExpressionGroup(typeof(Customer));
-        _ruleServiceMock
-            .Setup(x => x.CreateExpressionGroupAsync(It.Is<RuleSetEntity>(rs => rs.Id == ruleSet.Id), It.IsAny<IRuleVisitor>()))
-            .ReturnsAsync(group);
-        _targetGroupServiceMock
-            .Setup(x => x.ProcessFilter(It.Is<FilterExpression[]>(f => f.Length == 1 && ReferenceEquals(f[0], group)), LogicalRuleOperator.And, 0, 500))
-            .Returns(CreateFilterResult());
+        SetupRuleEvaluation(ruleSet);
 
         var task = CreateTask();
         var (ctx, _) = CreateExecutionContext();
@@ -359,13 +329,7 @@ public class TargetGroupEvaluatorTaskTests
     {
         var (_, ruleSet) = CreateRoleWithRuleSet("RoleWithNoChanges");
 
-        var group = new FilterExpressionGroup(typeof(Customer));
-        _ruleServiceMock
-            .Setup(x => x.CreateExpressionGroupAsync(It.Is<RuleSetEntity>(rs => rs.Id == ruleSet.Id), It.IsAny<IRuleVisitor>()))
-            .ReturnsAsync(group);
-        _targetGroupServiceMock
-            .Setup(x => x.ProcessFilter(It.Is<FilterExpression[]>(f => f.Length == 1 && ReferenceEquals(f[0], group)), LogicalRuleOperator.And, 0, 500))
-            .Returns(CreateFilterResult());
+        SetupRuleEvaluation(ruleSet);
 
         var task = CreateTask();
         var (ctx, _) = CreateExecutionContext();
@@ -390,22 +354,8 @@ public class TargetGroupEvaluatorTaskTests
         _db.Customers.AddRange(customerX, customerY);
         _db.SaveChanges();
 
-        var groupX = new FilterExpressionGroup(typeof(Customer));
-        var groupY = new FilterExpressionGroup(typeof(Customer));
-
-        _ruleServiceMock
-            .Setup(x => x.CreateExpressionGroupAsync(It.Is<RuleSetEntity>(rs => rs.Id == ruleSetX.Id), It.IsAny<IRuleVisitor>()))
-            .ReturnsAsync(groupX);
-        _ruleServiceMock
-            .Setup(x => x.CreateExpressionGroupAsync(It.Is<RuleSetEntity>(rs => rs.Id == ruleSetY.Id), It.IsAny<IRuleVisitor>()))
-            .ReturnsAsync(groupY);
-
-        _targetGroupServiceMock
-            .Setup(x => x.ProcessFilter(It.Is<FilterExpression[]>(f => f.Length == 1 && ReferenceEquals(f[0], groupX)), LogicalRuleOperator.And, 0, 500))
-            .Returns(CreateFilterResult(customerX.Id));
-        _targetGroupServiceMock
-            .Setup(x => x.ProcessFilter(It.Is<FilterExpression[]>(f => f.Length == 1 && ReferenceEquals(f[0], groupY)), LogicalRuleOperator.And, 0, 500))
-            .Returns(CreateFilterResult(customerY.Id));
+        SetupRuleEvaluation(ruleSetX, customerX.Id);
+        SetupRuleEvaluation(ruleSetY, customerY.Id);
 
         var cts = new CancellationTokenSource();
         var (ctx, taskStoreMock) = CreateExecutionContext();
@@ -505,6 +455,23 @@ public class TargetGroupEvaluatorTaskTests
         _db.SaveChanges();
 
         return (role, ruleSet);
+    }
+
+    /// <summary>
+    /// Stubs the rule-evaluation pipeline for <paramref name="ruleSet"/>: <see cref="IRuleService.CreateExpressionGroupAsync"/>
+    /// resolves to a fresh <see cref="FilterExpressionGroup"/> keyed to <paramref name="ruleSet"/>'s id, and
+    /// <see cref="ITargetGroupService.ProcessFilter"/> resolves to <see cref="CreateFilterResult"/> for that
+    /// same group instance, containing <paramref name="customerIds"/>.
+    /// </summary>
+    private void SetupRuleEvaluation(RuleSetEntity ruleSet, params int[] customerIds)
+    {
+        var group = new FilterExpressionGroup(typeof(Customer));
+        _ruleServiceMock
+            .Setup(x => x.CreateExpressionGroupAsync(It.Is<RuleSetEntity>(rs => rs.Id == ruleSet.Id), It.IsAny<IRuleVisitor>()))
+            .ReturnsAsync(group);
+        _targetGroupServiceMock
+            .Setup(x => x.ProcessFilter(It.Is<FilterExpression[]>(f => f.Length == 1 && ReferenceEquals(f[0], group)), LogicalRuleOperator.And, 0, 500))
+            .Returns(CreateFilterResult(customerIds));
     }
 
     /// <summary>
